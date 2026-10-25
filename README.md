@@ -16,7 +16,7 @@ The original brief is at the end of this file.
 | `Task_2_2_Solidity_Lending/contracts/MockUSDT.sol` | OpenZeppelin ERC-20 with 6 decimals, used in place of USDT in the tests |
 | `Task_2_2_Solidity_Lending/test/SimpleLending.test.js` | Three Hardhat unit tests: borrow, debt with interest, repay |
 | `Task_2_2_Solidity_Lending/scripts/deploy.js` | Deploys `SimpleLending` with the mainnet USDT address |
-| `sweep.yaml`, `.github/ISSUE_TEMPLATE/` | Config for the Sweep AI GitHub app, added by its bot in January 2024 |
+| `sweep.yaml`, `.github/ISSUE_TEMPLATE/` | Config for the Sweep AI GitHub app. `sweep-ai[bot]` committed both on the `sweep/add-sweep-config` branch in January 2024; they reached `main` when PR #1 was merged in December 2025 |
 
 ## 2.1 Word pair
 
