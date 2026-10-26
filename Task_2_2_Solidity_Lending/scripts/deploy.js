@@ -8,9 +8,9 @@ async function main() {
     const SimpleLending = await hre.ethers.getContractFactory("SimpleLending");
     const simpleLending = await SimpleLending.deploy(usdtAddress);
 
-    await simpleLending.deployed();
+    await simpleLending.waitForDeployment();
 
-    console.log(`SimpleLending deployed to ${simpleLending.address}`);
+    console.log(`SimpleLending deployed to ${await simpleLending.getAddress()}`);
 }
 
 main().catch((error) => {
