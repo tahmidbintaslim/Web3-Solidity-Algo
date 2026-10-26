@@ -197,8 +197,10 @@ not go to mainnet as written (see [Status](#status)).
 │   │   └── MockUSDT.sol         # 6-decimal ERC-20 for tests
 │   ├── scripts/deploy.js
 │   ├── test/SimpleLending.test.js
-│   ├── hardhat.config.js        # solc 0.8.16 and 0.8.20, no networks
-│   └── package.json             # npm scripts and security overrides
+│   ├── hardhat.config.js        # solc 0.8.20 and 0.8.16, no networks
+│   ├── package.json             # npm scripts and security overrides
+│   ├── package-lock.json        # exact dependency versions for npm ci
+│   └── README.md                # sub-project quick start
 ├── sweep.yaml                   # Sweep AI app config
 └── LICENSE
 ```
