@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hardhat:
+    name: Solidity lending (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Hardhat 2.29 supports Node 20, 22 and 24; 20 is past end of life.
+        node: [22, 24]
+    defaults:
+      run:
+        working-directory: Task_2_2_Solidity_Lending
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: Task_2_2_Solidity_Lending/package-lock.json
+      - run: npm ci
+      - run: npx hardhat compile
+      - run: npx hardhat test
+      - name: Deploy script against the in-process Hardhat network
+        run: npx hardhat run scripts/deploy.js
+
+  python:
+    name: Word pair (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: python -m unittest discover -s Task_2_1_Algorithm_Programming -v
+      - run: python Task_2_1_Algorithm_Programming/task2_1.py
