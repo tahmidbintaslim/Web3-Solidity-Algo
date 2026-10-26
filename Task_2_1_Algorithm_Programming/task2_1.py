@@ -12,8 +12,9 @@ def solve(wordList, target):
     # Return None if no pair is found
     return None
 
-# Test Cases
-print(solve(["ab", "bc", "cd"], "abcd"))   # Output: ('ab', 'cd') or ('cd', 'ab')
-print(solve(["ab", "bc", "cd"], "cdab"))   # Output: ('cd', 'ab') or ('ab', 'cd')
-print(solve(["ab", "bc", "cd"], "abab"))   # Output: None
-print(solve(["ab", "ba", "ab"], "abab"))   # Output: ('ab', 'ab')
+# Test Cases (run only when the file is executed, not when it is imported)
+if __name__ == "__main__":
+    print(solve(["ab", "bc", "cd"], "abcd"))   # Output: ('ab', 'cd') or ('cd', 'ab')
+    print(solve(["ab", "bc", "cd"], "cdab"))   # Output: ('cd', 'ab') or ('ab', 'cd')
+    print(solve(["ab", "bc", "cd"], "abab"))   # Output: None
+    print(solve(["ab", "ba", "ab"], "abab"))   # Output: ('ab', 'ab')
