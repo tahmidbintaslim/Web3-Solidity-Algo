@@ -30,6 +30,12 @@ describe("SimpleLending", function () {
       expect(await lending.usdt()).to.equal(await token.getAddress());
       expect(await token.balanceOf(await lending.getAddress())).to.equal(POOL);
     });
+
+    it("uses a mock token with 6 decimals, like USDT", async function () {
+      const { token } = await loadFixture(deploySimpleLendingFixture);
+
+      expect(await token.decimals()).to.equal(6n);
+    });
   });
 
   describe("Borrowing", function () {
