@@ -1,61 +1,135 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
+const { loadFixture } = require("@nomicfoundation/hardhat-network-helpers");
+
+// MockUSDT has 6 decimals, like USDT. Amounts are bigint (ethers v6).
+const usdt = (amount) => ethers.parseUnits(String(amount), 6);
+
+const POOL = usdt(10_000_000); // the brief: the contract starts with 10 million USDT
+const BORROW = usdt(1_000);
+const INTEREST = BORROW / 10n; // fixed 10%
 
 describe("SimpleLending", function () {
-    async function deploySimpleLendingFixture() {
-        const [owner, borrower] = await ethers.getSigners();
+  async function deploySimpleLendingFixture() {
+    const [owner, borrower] = await ethers.getSigners();
 
-        const MockUSDT = await ethers.getContractFactory("MockUSDT");
-        const usdt = await MockUSDT.deploy(10000000 * 10 ** 6);
-        console.log("MockUSDT address:", usdt.address);
+    // The owner keeps 1,000 mUSDT beyond the pool to hand borrowers their interest.
+    const token = await ethers.deployContract("MockUSDT", [POOL + usdt(1_000)]);
+    const lending = await ethers.deployContract("SimpleLending", [
+      await token.getAddress(),
+    ]);
+    await token.transfer(await lending.getAddress(), POOL);
 
-        const SimpleLending = await ethers.getContractFactory("SimpleLending");
-        const simpleLending = await SimpleLending.deploy(usdt.address);
-        console.log("SimpleLending address:", simpleLending.address);
+    return { lending, token, owner, borrower };
+  }
 
-        await usdt.transfer(simpleLending.address, 10000000 * 10 ** 6);
+  describe("Deployment", function () {
+    it("stores the token address and starts with the 10M pool", async function () {
+      const { lending, token } = await loadFixture(deploySimpleLendingFixture);
 
-        return { simpleLending, usdt, owner, borrower };
-    }
-
-    describe("Borrowing", function () {
-        it("should allow a user to borrow USDT", async function () {
-            const { simpleLending, usdt, borrower } = await deploySimpleLendingFixture();
-            // Manually calculate the borrow amount (1000 USDT with 6 decimals)
-            const borrowAmount = 1000 * 10 ** 6;
-
-            await simpleLending.connect(borrower).borrow(borrowAmount);
-
-            const borrowerBalance = await usdt.balanceOf(borrower.address);
-            expect(borrowerBalance.toString()).to.equal(borrowAmount.toString());
-        });
-
-        it("should record the debt with interest", async function () {
-            const { simpleLending, borrower } = await deploySimpleLendingFixture();
-            // Manually calculate the borrow amount (1000 USDT with 6 decimals)
-            const borrowAmount = 1000 * 10 ** 6;
-
-            await simpleLending.connect(borrower).borrow(borrowAmount);
-
-            const debt = await simpleLending.balances(borrower.address);
-            const expectedDebt = borrowAmount + (borrowAmount / 10); // 10% interest
-            expect(debt.toString()).to.equal(expectedDebt.toString());
-        });
+      expect(await lending.usdt()).to.equal(await token.getAddress());
+      expect(await token.balanceOf(await lending.getAddress())).to.equal(POOL);
     });
 
-    describe("Repaying", function () {
-        it("should allow a user to repay the borrowed USDT with interest", async function () {
-            const { simpleLending, usdt, borrower } = await deploySimpleLendingFixture();
-            // Manually calculate the borrow amount (1000 USDT with 6 decimals)
-            const borrowAmount = 1000 * 10 ** 6;
+    it("uses a mock token with 6 decimals, like USDT", async function () {
+      const { token } = await loadFixture(deploySimpleLendingFixture);
 
-            await simpleLending.connect(borrower).borrow(borrowAmount);
-            const interest = borrowAmount / 10;
-            await usdt.connect(borrower).approve(simpleLending.address, borrowAmount + interest);
-            await simpleLending.connect(borrower).repay();
-
-            const borrowerDebt = await simpleLending.balances(borrower.address);
-            expect(borrowerDebt.toString()).to.equal('0');
-        });
+      expect(await token.decimals()).to.equal(6n);
     });
+  });
+
+  describe("Borrowing", function () {
+    it("should allow a user to borrow USDT", async function () {
+      const { lending, token, borrower } = await loadFixture(deploySimpleLendingFixture);
+
+      await expect(lending.connect(borrower).borrow(BORROW)).to.changeTokenBalances(
+        token,
+        [borrower, lending],
+        [BORROW, -BORROW],
+      );
+    });
+
+    it("should record the debt with interest", async function () {
+      const { lending, borrower } = await loadFixture(deploySimpleLendingFixture);
+
+      await lending.connect(borrower).borrow(BORROW);
+
+      expect(await lending.balances(borrower.address)).to.equal(BORROW + INTEREST);
+    });
+
+    it("adds a second loan to the existing debt", async function () {
+      const { lending, borrower } = await loadFixture(deploySimpleLendingFixture);
+
+      await lending.connect(borrower).borrow(BORROW);
+      await lending.connect(borrower).borrow(BORROW);
+
+      expect(await lending.balances(borrower.address)).to.equal(2n * (BORROW + INTEREST));
+    });
+
+    it("emits Borrowed with the borrower and the amount", async function () {
+      const { lending, borrower } = await loadFixture(deploySimpleLendingFixture);
+
+      await expect(lending.connect(borrower).borrow(BORROW))
+        .to.emit(lending, "Borrowed")
+        .withArgs(borrower.address, BORROW);
+    });
+
+    it("reverts when the contract holds less than the amount", async function () {
+      const { lending, borrower } = await loadFixture(deploySimpleLendingFixture);
+
+      await expect(lending.connect(borrower).borrow(POOL + 1n)).to.be.revertedWith(
+        "Insufficient funds in contract",
+      );
+    });
+  });
+
+  describe("Repaying", function () {
+    it("should allow a user to repay the borrowed USDT with interest", async function () {
+      const { lending, token, borrower } = await loadFixture(deploySimpleLendingFixture);
+
+      await lending.connect(borrower).borrow(BORROW);
+      // The borrower only received BORROW, so give them the interest to pay back.
+      await token.transfer(borrower.address, INTEREST);
+      await token.connect(borrower).approve(await lending.getAddress(), BORROW + INTEREST);
+
+      await expect(lending.connect(borrower).repay()).to.changeTokenBalances(
+        token,
+        [borrower, lending],
+        [-(BORROW + INTEREST), BORROW + INTEREST],
+      );
+      expect(await lending.balances(borrower.address)).to.equal(0n);
+    });
+
+    it("emits Repaid with the borrower and the amount owed", async function () {
+      const { lending, token, borrower } = await loadFixture(deploySimpleLendingFixture);
+
+      await lending.connect(borrower).borrow(BORROW);
+      await token.transfer(borrower.address, INTEREST);
+      await token.connect(borrower).approve(await lending.getAddress(), BORROW + INTEREST);
+
+      await expect(lending.connect(borrower).repay())
+        .to.emit(lending, "Repaid")
+        .withArgs(borrower.address, BORROW + INTEREST);
+    });
+
+    it("reverts when the caller has no debt", async function () {
+      const { lending, borrower } = await loadFixture(deploySimpleLendingFixture);
+
+      await expect(lending.connect(borrower).repay()).to.be.revertedWith("No debt to repay");
+    });
+
+    it("reverts when the caller has not approved the full debt", async function () {
+      const { lending, token, borrower } = await loadFixture(deploySimpleLendingFixture);
+
+      await lending.connect(borrower).borrow(BORROW);
+      await token.transfer(borrower.address, INTEREST);
+      await token.connect(borrower).approve(await lending.getAddress(), BORROW);
+
+      await expect(lending.connect(borrower).repay()).to.be.revertedWithCustomError(
+        token,
+        "ERC20InsufficientAllowance",
+      );
+      expect(await lending.balances(borrower.address)).to.equal(BORROW + INTEREST);
+    });
+  });
 });
